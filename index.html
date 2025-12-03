@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FocusTube - Your Video Library</title>
-    <link rel="icon" type="image/png" href="FocusTube.png">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Literata:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -493,6 +492,14 @@
         }
 
         body.dark .library-title {
+            color: var(--primary-100);
+        }
+
+        [data-theme="midnight"] .library-title {
+            color: var(--primary-300);
+        }
+
+        body.dark[data-theme="midnight"] .library-title {
             color: var(--primary-100);
         }
 
@@ -1555,6 +1562,7 @@
 
             // Render folders first
             if (folders.length > 0) {
+                html += '<div class="folder-section-header">📁 Folders</div>';
                 html += folders.map((folder, folderIndex) => {
                     const videoCount = folder.videoIndices.length;
                     return `
