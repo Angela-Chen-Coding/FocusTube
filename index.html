@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FocusTube - Your Video Library</title>
-    <link rel="icon" type="image/png" href="FocusTube.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Literata:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -700,14 +700,14 @@
 
         .video-actions {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 0.5rem;
             margin-top: 1rem;
         }
 
         .video-actions button {
-            font-size: 0.75rem;
-            padding: 0.6rem 1rem;
+            font-size: 0.65rem;
+            padding: 0.6rem 0.5rem;
             height: auto;
         }
 
@@ -1023,8 +1023,10 @@
                 <div class="video-title" id="videoTitle">Your Video</div>
                 <div class="video-url" id="videoUrlDisplay"></div>
                 <div class="video-actions">
-                    <button onclick="saveAndReturnToLibrary()">💾 Save & Back</button>
+                    <button onclick="showSaveToLibraryModal()">💾 Save</button>
+                    <button class="secondary" onclick="backToLibrary()">🔙 Back</button>
                     <button class="secondary" onclick="shareVideo()">🔗 Share</button>
+                    <button class="secondary" onclick="showQRCode()">📱 QR</button>
                 </div>
             </div>
 
@@ -1079,13 +1081,69 @@
         </div>
     </div>
 
+    <!-- Save to Library Modal -->
+    <div id="saveToLibraryModal" class="modal">
+        <div class="modal-content">
+            <h2>💾 Save to Library</h2>
+            <div class="input-group">
+                <label>Video Name (Optional)</label>
+                <input type="text" id="videoNameInput" placeholder="My awesome video...">
+                <p class="hint">Leave empty for auto-naming</p>
+            </div>
+            <div class="input-group">
+                <label>Description (Optional)</label>
+                <textarea id="videoDescInput" placeholder="What's this video about?" rows="3" style="resize: vertical;"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeSaveToLibraryModal()">Cancel</button>
+                <button onclick="saveCurrentVideoToLibrary()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Video Modal -->
+    <div id="renameModal" class="modal">
+        <div class="modal-content">
+            <h2>✏️ Edit Video</h2>
+            <div class="input-group">
+                <label>Video Name</label>
+                <input type="text" id="renameInput" placeholder="Enter video name...">
+            </div>
+            <div class="input-group">
+                <label>Description (Optional)</label>
+                <textarea id="editDescInput" placeholder="What's this video about?" rows="3" style="resize: vertical;"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeRenameModal()">Cancel</button>
+                <button onclick="confirmRename()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <h2>📱 QR Code</h2>
+            <p>Scan this code to open the video on your phone!</p>
+            <div style="display: flex; justify-content: center; margin: 2rem 0;">
+                <div id="qrcode"></div>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeQRModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // ===== DATA STRUCTURE =====
         let videoLibrary = []; // Array of video objects
-        let currentVideoIndex = null; // Currently viewing video index
+        let currentVideoIndex = null; // Currently viewing video index (null if temp video)
+        let tempVideo = null; // Temporary video being watched (not yet saved to library)
         let youtubePlayer = null;
         let manualDarkMode = false;
+        let renameIndex = null; // Track which video is being renamed
 
         // YouTube IFrame API callback
         function onYouTubeIframeAPIReady() {
@@ -1216,18 +1274,20 @@
                 return;
             }
 
-            // Add first video to library
-            videoLibrary.push({
+            // Store as temporary video (NOT saved to library yet)
+            tempVideo = {
                 videoUrl: videoUrl,
                 embedUrl: videoData.embedUrl,
                 videoId: videoData.videoId,
                 platform: videoData.platform,
                 notes: '',
-                dateAdded: Date.now()
-            });
+                dateAdded: Date.now(),
+                title: '', // Will be set when saving
+                description: '' // Will be set when saving
+            };
 
-            // Go directly to video view
-            currentVideoIndex = 0;
+            // Go directly to video view (temp mode)
+            currentVideoIndex = null;
             showVideoPlayer();
         }
 
@@ -1240,9 +1300,10 @@
         }
 
         function showVideoPlayer() {
-            if (currentVideoIndex === null || !videoLibrary[currentVideoIndex]) return;
+            // Get video from either temp or library
+            const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
+            if (!video) return;
 
-            const video = videoLibrary[currentVideoIndex];
             const timestampBtn = document.querySelector('.timestamp-btn');
 
             // Clear any existing YouTube player
@@ -1273,7 +1334,7 @@
                 timestampBtn.textContent = '⏰ Timestamp (YouTube only)';
             }
 
-            document.getElementById('videoTitle').textContent = `${video.platform} Video`;
+            document.getElementById('videoTitle').textContent = video.title || `${video.platform} Video`;
             document.getElementById('videoUrlDisplay').textContent = video.videoUrl;
             document.getElementById('notesArea').value = video.notes || '';
 
@@ -1297,17 +1358,23 @@
             }
 
             emptyState.style.display = 'none';
-            grid.innerHTML = videoLibrary.map((video, index) => `
-                <div class="video-card" onclick="openVideo(${index})">
-                    <span class="video-card-platform">${video.platform}</span>
-                    <div class="video-card-title">Video ${index + 1}</div>
-                    <div class="video-card-notes-preview">${video.notes || 'No notes yet...'}</div>
-                    <div class="video-card-footer">
-                        <span>${new Date(video.dateAdded).toLocaleDateString()}</span>
-                        <button class="delete-btn" onclick="event.stopPropagation(); deleteVideo(${index})" title="Delete">🗑️</button>
+            grid.innerHTML = videoLibrary.map((video, index) => {
+                const preview = video.description || video.notes || 'No description yet...';
+                return `
+                    <div class="video-card" onclick="openVideo(${index})">
+                        <span class="video-card-platform">${video.platform}</span>
+                        <div class="video-card-title">${video.title || 'Untitled Video'}</div>
+                        <div class="video-card-notes-preview">${preview}</div>
+                        <div class="video-card-footer">
+                            <span>${new Date(video.dateAdded).toLocaleDateString()}</span>
+                            <div>
+                                <button class="delete-btn" onclick="event.stopPropagation(); showRenameModal(${index})" title="Edit">✏️</button>
+                                <button class="delete-btn" onclick="event.stopPropagation(); deleteVideo(${index})" title="Delete">🗑️</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function openVideo(index) {
@@ -1366,29 +1433,92 @@
                 return;
             }
 
-            videoLibrary.push({
+            // Store as temp and ask for name
+            tempVideo = {
                 videoUrl: url,
                 embedUrl: videoData.embedUrl,
                 videoId: videoData.videoId,
                 platform: videoData.platform,
                 notes: '',
-                dateAdded: Date.now()
-            });
+                dateAdded: Date.now(),
+                title: '',
+                description: ''
+            };
 
+            currentVideoIndex = null;
             closeAddVideoModal();
-            renderLibrary();
-            showAlert('✅ Video added to library!');
+            showVideoPlayer();
         }
 
-        // ===== SAVE & RETURN =====
-        function saveAndReturnToLibrary() {
-            // Save current notes
+        // ===== SAVE TO LIBRARY =====
+        function showSaveToLibraryModal() {
+            document.getElementById('videoNameInput').value = '';
+            document.getElementById('saveToLibraryModal').classList.add('active');
+        }
+
+        function closeSaveToLibraryModal() {
+            document.getElementById('saveToLibraryModal').classList.remove('active');
+        }
+
+        function saveCurrentVideoToLibrary() {
+            const customName = document.getElementById('videoNameInput').value.trim();
+            const customDesc = document.getElementById('videoDescInput').value.trim();
+            const notes = document.getElementById('notesArea').value;
+
+            let videoToSave;
+
+            if (currentVideoIndex !== null) {
+                // Updating existing library video
+                videoLibrary[currentVideoIndex].notes = notes;
+                if (customName) {
+                    videoLibrary[currentVideoIndex].title = customName;
+                }
+                if (customDesc) {
+                    videoLibrary[currentVideoIndex].description = customDesc;
+                }
+                closeSaveToLibraryModal();
+                showLibrary();
+                showAlert('✅ Video updated!');
+                return;
+            }
+
+            // Saving temp video to library
+            if (!tempVideo) return;
+
+            // Auto-generate title if empty
+            const title = customName || `Video ${videoLibrary.length + 1}`;
+
+            videoToSave = {
+                ...tempVideo,
+                title: title,
+                description: customDesc,
+                notes: notes,
+                dateAdded: Date.now()
+            };
+
+            videoLibrary.push(videoToSave);
+            tempVideo = null;
+
+            closeSaveToLibraryModal();
+            showLibrary();
+            showAlert('✅ Saved to library!');
+        }
+
+        function backToLibrary() {
+            // Save notes if watching a library video
             if (currentVideoIndex !== null) {
                 videoLibrary[currentVideoIndex].notes = document.getElementById('notesArea').value;
             }
 
+            // If library is empty and we're in temp mode, go to start
+            if (videoLibrary.length === 0) {
+                document.getElementById('videoView').classList.remove('active');
+                document.getElementById('startScreen').classList.add('active');
+                tempVideo = null;
+                return;
+            }
+
             showLibrary();
-            showAlert('✅ Notes saved!');
         }
 
         // ===== EXPORT LIBRARY =====
@@ -1416,12 +1546,20 @@
 
         // ===== SHARE VIDEO =====
         function shareVideo() {
-            if (currentVideoIndex === null) return;
+            const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
+            if (!video) return;
 
-            const video = videoLibrary[currentVideoIndex];
             const baseUrl = window.location.origin + window.location.pathname;
             const params = new URLSearchParams();
             params.set('v', video.videoUrl);
+
+            if (video.title) {
+                params.set('title', video.title);
+            }
+
+            if (video.description) {
+                params.set('desc', video.description);
+            }
 
             if (video.notes) {
                 params.set('notes', video.notes);
@@ -1447,6 +1585,81 @@
             document.getElementById('shareModal').classList.remove('active');
         }
 
+        // ===== QR CODE =====
+        function showQRCode() {
+            const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
+            if (!video) return;
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            const params = new URLSearchParams();
+            params.set('v', video.videoUrl);
+
+            if (video.title) {
+                params.set('title', video.title);
+            }
+
+            if (video.description) {
+                params.set('desc', video.description);
+            }
+
+            if (video.notes) {
+                params.set('notes', video.notes);
+            }
+
+            const shareUrl = `${baseUrl}?${params.toString()}`;
+
+            // Clear previous QR code
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+
+            // Generate new QR code
+            new QRCode(qrContainer, {
+                text: shareUrl,
+                width: 256,
+                height: 256,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('qrModal').classList.add('active');
+        }
+
+        function closeQRModal() {
+            document.getElementById('qrModal').classList.remove('active');
+        }
+
+        // ===== EDIT VIDEO =====
+        function showRenameModal(index) {
+            renameIndex = index;
+            document.getElementById('renameInput').value = videoLibrary[index].title || '';
+            document.getElementById('editDescInput').value = videoLibrary[index].description || '';
+            document.getElementById('renameModal').classList.add('active');
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.remove('active');
+            renameIndex = null;
+        }
+
+        function confirmRename() {
+            const newName = document.getElementById('renameInput').value.trim();
+            const newDesc = document.getElementById('editDescInput').value.trim();
+
+            if (!newName) {
+                showAlert('Please enter a name!');
+                return;
+            }
+
+            if (renameIndex !== null) {
+                videoLibrary[renameIndex].title = newName;
+                videoLibrary[renameIndex].description = newDesc;
+                renderLibrary();
+                closeRenameModal();
+                showAlert('✅ Video updated!');
+            }
+        }
+
         // ===== TIMESTAMPS =====
         function formatTime(seconds) {
             const hrs = Math.floor(seconds / 3600);
@@ -1461,8 +1674,9 @@
 
         function insertTimestamp() {
             const notesArea = document.getElementById('notesArea');
+            const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
 
-            if (currentVideoIndex !== null && videoLibrary[currentVideoIndex].platform === 'YouTube' && youtubePlayer && youtubePlayer.getCurrentTime) {
+            if (video && video.platform === 'YouTube' && youtubePlayer && youtubePlayer.getCurrentTime) {
                 try {
                     const currentTime = Math.floor(youtubePlayer.getCurrentTime());
                     const timeString = formatTime(currentTime);
@@ -1476,7 +1690,11 @@
                     notesArea.selectionStart = notesArea.selectionEnd = cursorPos + timeString.length + 4;
 
                     // Auto-save notes
-                    videoLibrary[currentVideoIndex].notes = notesArea.value;
+                    if (currentVideoIndex !== null) {
+                        videoLibrary[currentVideoIndex].notes = notesArea.value;
+                    } else if (tempVideo) {
+                        tempVideo.notes = notesArea.value;
+                    }
                 } catch (e) {
                     showAlert('Could not get video time. Make sure the video is loaded!');
                 }
@@ -1543,8 +1761,12 @@
         // Auto-save notes every 2 seconds
         setInterval(() => {
             const notesArea = document.getElementById('notesArea');
-            if (currentVideoIndex !== null && document.getElementById('videoView').classList.contains('active')) {
-                videoLibrary[currentVideoIndex].notes = notesArea.value;
+            if (document.getElementById('videoView').classList.contains('active')) {
+                if (currentVideoIndex !== null) {
+                    videoLibrary[currentVideoIndex].notes = notesArea.value;
+                } else if (tempVideo) {
+                    tempVideo.notes = notesArea.value;
+                }
             }
         }, 2000);
     </script>
