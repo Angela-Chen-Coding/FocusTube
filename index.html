@@ -625,6 +625,76 @@
             opacity: 0.5;
         }
 
+        /* Folder Styles */
+        .folder-card {
+            background: linear-gradient(135deg, var(--primary-100) 0%, var(--secondary-100) 100%);
+            backdrop-filter: blur(30px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 2px solid var(--primary-300);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+        }
+
+        body.dark .folder-card {
+            background: linear-gradient(135deg, var(--primary-800) 0%, var(--primary-700) 100%);
+            border-color: var(--primary-500);
+        }
+
+        .folder-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .folder-card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .folder-card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary-800);
+            margin-bottom: 0.5rem;
+        }
+
+        body.dark .folder-card-title {
+            color: var(--primary-100);
+        }
+
+        .folder-card-count {
+            font-size: 0.85rem;
+            color: var(--primary-600);
+            font-weight: 500;
+        }
+
+        body.dark .folder-card-count {
+            color: var(--primary-300);
+        }
+
+        .folder-card-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            justify-content: flex-end;
+        }
+
+        .folder-section-header {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary-700);
+            margin: 2rem 0 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        body.dark .folder-section-header {
+            color: var(--primary-200);
+        }
+
         /* Video View Styles (similar to before) */
         #videoView.active {
             display: grid;
@@ -949,7 +1019,7 @@
     <div class="container">
         <header>
             <h1>FocusTube</h1>
-            <p class="tagline">Your personal video library</p>
+            <p class="tagline">Your personal video player</p>
             <div class="theme-switcher">
                 <span class="theme-switcher-label">Theme</span>
                 <button class="theme-dot active" data-theme="rose" onclick="switchTheme('rose')" title="Rose Blush"></button>
@@ -994,6 +1064,7 @@
             <div class="library-header">
                 <h2 class="library-title">📚 My Videos</h2>
                 <div class="library-actions">
+                    <button onclick="showCreateFolderModal()">📁 New Folder</button>
                     <button onclick="showAddVideoModal()">➕ Add Video</button>
                     <button class="secondary" onclick="exportLibrary()">💾 Export Library</button>
                 </div>
@@ -1134,16 +1205,61 @@
         </div>
     </div>
 
+    <!-- Create Folder Modal -->
+    <div id="createFolderModal" class="modal">
+        <div class="modal-content">
+            <h2>📁 Create New Folder</h2>
+            <div class="input-group">
+                <label>Folder Name</label>
+                <input type="text" id="newFolderName" placeholder="My Folder...">
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeCreateFolderModal()">Cancel</button>
+                <button onclick="createNewFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Folder Modal -->
+    <div id="editFolderModal" class="modal">
+        <div class="modal-content">
+            <h2>✏️ Edit Folder</h2>
+            <div class="input-group">
+                <label>Folder Name</label>
+                <input type="text" id="editFolderName" placeholder="Folder name...">
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeEditFolderModal()">Cancel</button>
+                <button onclick="saveEditFolder()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Move to Folder Modal -->
+    <div id="moveToFolderModal" class="modal">
+        <div class="modal-content">
+            <h2>📁 Move Video to Folder</h2>
+            <p>Select a folder for this video:</p>
+            <div id="folderListForMove" style="max-height: 300px; overflow-y: auto;"></div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeMoveToFolderModal()">Cancel</button>
+                <button onclick="removeFromFolder()">📤 Remove from Folder</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // ===== DATA STRUCTURE =====
         let videoLibrary = []; // Array of video objects
+        let folders = []; // Array of folder objects: { name: 'Folder Name', videoIndices: [0, 2, 5] }
         let currentVideoIndex = null; // Currently viewing video index (null if temp video)
         let tempVideo = null; // Temporary video being watched (not yet saved to library)
         let youtubePlayer = null;
         let manualDarkMode = false;
         let renameIndex = null; // Track which video is being renamed
+        let editFolderIndex = null; // Track which folder is being edited
 
         // YouTube IFrame API callback
         function onYouTubeIframeAPIReady() {
@@ -1245,6 +1361,36 @@
             return null;
         }
 
+        // ===== URL PARAMETER HANDLING =====
+        // Check for URL parameters on page load
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const videoParam = urlParams.get('v');
+            const titleParam = urlParams.get('title');
+            const descParam = urlParams.get('desc');
+            const notesParam = urlParams.get('notes');
+
+            if (videoParam) {
+                const videoData = detectVideoPlatform(videoParam);
+                if (videoData) {
+                    tempVideo = {
+                        videoUrl: videoParam,
+                        embedUrl: videoData.embedUrl,
+                        videoId: videoData.videoId,
+                        platform: videoData.platform,
+                        notes: notesParam ? decodeURIComponent(notesParam) : '',
+                        dateAdded: Date.now(),
+                        title: titleParam ? decodeURIComponent(titleParam) : '',
+                        description: descParam ? decodeURIComponent(descParam) : ''
+                    };
+
+                    currentVideoIndex = null;
+                    document.getElementById('startScreen').classList.remove('active');
+                    showVideoPlayer();
+                }
+            }
+        });
+
         // ===== APP INITIALIZATION =====
         function startApp() {
             const importCode = document.getElementById('importCode').value.trim();
@@ -1254,7 +1400,19 @@
             if (importCode) {
                 try {
                     const decoded = atob(importCode);
-                    videoLibrary = JSON.parse(decoded);
+                    const importData = JSON.parse(decoded);
+
+                    // Support both old format (array) and new format (object with videos and folders)
+                    if (Array.isArray(importData)) {
+                        // Old format - just videos
+                        videoLibrary = importData;
+                        folders = [];
+                    } else {
+                        // New format - videos and folders
+                        videoLibrary = importData.videos || [];
+                        folders = importData.folders || [];
+                    }
+
                     showLibrary();
                     return;
                 } catch (e) {
@@ -1351,14 +1509,87 @@
             const grid = document.getElementById('videoGrid');
             const emptyState = document.getElementById('emptyLibrary');
 
-            if (videoLibrary.length === 0) {
+            if (videoLibrary.length === 0 && folders.length === 0) {
                 grid.innerHTML = '';
                 emptyState.style.display = 'block';
                 return;
             }
 
             emptyState.style.display = 'none';
-            grid.innerHTML = videoLibrary.map((video, index) => {
+
+            // Get indices of videos that are in folders
+            const videosInFolders = new Set();
+            folders.forEach(folder => {
+                folder.videoIndices.forEach(idx => videosInFolders.add(idx));
+            });
+
+            let html = '';
+
+            // Render folders first
+            if (folders.length > 0) {
+                html += folders.map((folder, folderIndex) => {
+                    const videoCount = folder.videoIndices.length;
+                    return `
+                        <div class="folder-card" onclick="openFolder(${folderIndex})">
+                            <div class="folder-card-icon">📁</div>
+                            <div class="folder-card-title">${folder.name}</div>
+                            <div class="folder-card-count">${videoCount} video${videoCount !== 1 ? 's' : ''}</div>
+                            <div class="folder-card-actions">
+                                <button class="delete-btn" onclick="event.stopPropagation(); showEditFolderModal(${folderIndex})" title="Rename">✏️</button>
+                                <button class="delete-btn" onclick="event.stopPropagation(); deleteFolder(${folderIndex})" title="Delete">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Render loose videos (not in any folder)
+            const looseVideos = videoLibrary
+                .map((video, index) => ({ video, index }))
+                .filter(({ index }) => !videosInFolders.has(index));
+
+            if (looseVideos.length > 0) {
+                if (folders.length > 0) {
+                    html += '<div class="folder-section-header">📹 Videos</div>';
+                }
+
+                html += looseVideos.map(({ video, index }) => {
+                    const preview = video.description || video.notes || 'No description yet...';
+                    return `
+                        <div class="video-card" onclick="openVideo(${index})">
+                            <span class="video-card-platform">${video.platform}</span>
+                            <div class="video-card-title">${video.title || 'Untitled Video'}</div>
+                            <div class="video-card-notes-preview">${preview}</div>
+                            <div class="video-card-footer">
+                                <span>${new Date(video.dateAdded).toLocaleDateString()}</span>
+                                <div>
+                                    <button class="delete-btn" onclick="event.stopPropagation(); showMoveToFolderModal(${index})" title="Move to Folder">📁</button>
+                                    <button class="delete-btn" onclick="event.stopPropagation(); showRenameModal(${index})" title="Edit">✏️</button>
+                                    <button class="delete-btn" onclick="event.stopPropagation(); deleteVideo(${index})" title="Delete">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            grid.innerHTML = html;
+        }
+
+        function openFolder(folderIndex) {
+            const folder = folders[folderIndex];
+            const grid = document.getElementById('videoGrid');
+
+            // Render back button + videos in this folder
+            let html = `
+                <div class="video-card" onclick="showLibrary()" style="text-align: center; cursor: pointer;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔙</div>
+                    <div class="video-card-title">Back to Library</div>
+                </div>
+            `;
+
+            html += folder.videoIndices.map(index => {
+                const video = videoLibrary[index];
                 const preview = video.description || video.notes || 'No description yet...';
                 return `
                     <div class="video-card" onclick="openVideo(${index})">
@@ -1368,6 +1599,7 @@
                         <div class="video-card-footer">
                             <span>${new Date(video.dateAdded).toLocaleDateString()}</span>
                             <div>
+                                <button class="delete-btn" onclick="event.stopPropagation(); removeVideoFromFolder(${folderIndex}, ${index})" title="Remove from Folder">📤</button>
                                 <button class="delete-btn" onclick="event.stopPropagation(); showRenameModal(${index})" title="Edit">✏️</button>
                                 <button class="delete-btn" onclick="event.stopPropagation(); deleteVideo(${index})" title="Delete">🗑️</button>
                             </div>
@@ -1375,6 +1607,8 @@
                     </div>
                 `;
             }).join('');
+
+            grid.innerHTML = html;
         }
 
         function openVideo(index) {
@@ -1405,8 +1639,160 @@
 
         function confirmDelete(index) {
             videoLibrary.splice(index, 1);
+
+            // Remove this video from all folders and adjust indices
+            folders.forEach(folder => {
+                folder.videoIndices = folder.videoIndices
+                    .filter(idx => idx !== index)
+                    .map(idx => idx > index ? idx - 1 : idx);
+            });
+
             renderLibrary();
             showAlert('✅ Video deleted from library!');
+        }
+
+        // ===== FOLDER MANAGEMENT =====
+        function showCreateFolderModal() {
+            document.getElementById('newFolderName').value = '';
+            document.getElementById('createFolderModal').classList.add('active');
+        }
+
+        function closeCreateFolderModal() {
+            document.getElementById('createFolderModal').classList.remove('active');
+        }
+
+        function createNewFolder() {
+            const name = document.getElementById('newFolderName').value.trim();
+
+            if (!name) {
+                showAlert('Please enter a folder name!');
+                return;
+            }
+
+            folders.push({
+                name: name,
+                videoIndices: []
+            });
+
+            closeCreateFolderModal();
+            renderLibrary();
+            showAlert('✅ Folder created!');
+        }
+
+        function showEditFolderModal(folderIndex) {
+            editFolderIndex = folderIndex;
+            document.getElementById('editFolderName').value = folders[folderIndex].name;
+            document.getElementById('editFolderModal').classList.add('active');
+        }
+
+        function closeEditFolderModal() {
+            document.getElementById('editFolderModal').classList.remove('active');
+            editFolderIndex = null;
+        }
+
+        function saveEditFolder() {
+            const newName = document.getElementById('editFolderName').value.trim();
+
+            if (!newName) {
+                showAlert('Please enter a folder name!');
+                return;
+            }
+
+            if (editFolderIndex !== null) {
+                folders[editFolderIndex].name = newName;
+                renderLibrary();
+                closeEditFolderModal();
+                showAlert('✅ Folder renamed!');
+            }
+        }
+
+        function deleteFolder(folderIndex) {
+            const folder = folders[folderIndex];
+
+            const confirmModal = document.createElement('div');
+            confirmModal.className = 'modal active';
+            confirmModal.innerHTML = `
+                <div class="modal-content">
+                    <h2>⚠️ Delete Folder?</h2>
+                    <p>This will delete the folder "${folder.name}". Videos inside will NOT be deleted and will move to the main library.</p>
+                    <div class="modal-actions">
+                        <button class="secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+                        <button onclick="confirmDeleteFolder(${folderIndex}); this.closest('.modal').remove()">Delete Folder</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(confirmModal);
+        }
+
+        function confirmDeleteFolder(folderIndex) {
+            folders.splice(folderIndex, 1);
+            renderLibrary();
+            showAlert('✅ Folder deleted! Videos moved to main library.');
+        }
+
+        let moveVideoIndex = null;
+
+        function showMoveToFolderModal(videoIndex) {
+            moveVideoIndex = videoIndex;
+
+            const listContainer = document.getElementById('folderListForMove');
+            if (folders.length === 0) {
+                listContainer.innerHTML = '<p style="text-align: center; color: var(--primary-500); padding: 2rem;">No folders yet! Create one first.</p>';
+            } else {
+                listContainer.innerHTML = folders.map((folder, folderIndex) => {
+                    const isInFolder = folder.videoIndices.includes(videoIndex);
+                    return `
+                        <div style="padding: 1rem; margin: 0.5rem 0; background: var(--primary-100); border-radius: 8px; cursor: pointer; border: 2px solid ${isInFolder ? 'var(--primary-500)' : 'transparent'};" onclick="moveVideoToFolder(${folderIndex})">
+                            <div style="font-weight: 600; color: var(--primary-800);">📁 ${folder.name}</div>
+                            <div style="font-size: 0.85rem; color: var(--primary-600);">${folder.videoIndices.length} videos ${isInFolder ? '(current)' : ''}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            document.getElementById('moveToFolderModal').classList.add('active');
+        }
+
+        function closeMoveToFolderModal() {
+            document.getElementById('moveToFolderModal').classList.remove('active');
+            moveVideoIndex = null;
+        }
+
+        function moveVideoToFolder(folderIndex) {
+            if (moveVideoIndex === null) return;
+
+            // Remove from all other folders
+            folders.forEach(folder => {
+                folder.videoIndices = folder.videoIndices.filter(idx => idx !== moveVideoIndex);
+            });
+
+            // Add to selected folder if not already there
+            if (!folders[folderIndex].videoIndices.includes(moveVideoIndex)) {
+                folders[folderIndex].videoIndices.push(moveVideoIndex);
+            }
+
+            closeMoveToFolderModal();
+            renderLibrary();
+            showAlert('✅ Video moved to folder!');
+        }
+
+        function removeFromFolder() {
+            if (moveVideoIndex === null) return;
+
+            // Remove from all folders
+            folders.forEach(folder => {
+                folder.videoIndices = folder.videoIndices.filter(idx => idx !== moveVideoIndex);
+            });
+
+            closeMoveToFolderModal();
+            renderLibrary();
+            showAlert('✅ Video removed from folder!');
+        }
+
+        function removeVideoFromFolder(folderIndex, videoIndex) {
+            folders[folderIndex].videoIndices = folders[folderIndex].videoIndices.filter(idx => idx !== videoIndex);
+            renderLibrary();
+            showAlert('✅ Video removed from folder!');
         }
 
         // ===== ADD NEW VIDEO =====
@@ -1510,6 +1896,28 @@
                 videoLibrary[currentVideoIndex].notes = document.getElementById('notesArea').value;
             }
 
+            // If watching temp video with notes, warn before discarding
+            if (currentVideoIndex === null && tempVideo && tempVideo.notes && tempVideo.notes.trim()) {
+                const confirmModal = document.createElement('div');
+                confirmModal.className = 'modal active';
+                confirmModal.innerHTML = `
+                    <div class="modal-content">
+                        <h2>⚠️ Discard Unsaved Video?</h2>
+                        <p>You have notes for this video but haven't saved it to your library. Your notes will be lost!</p>
+                        <div class="modal-actions">
+                            <button class="secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+                            <button onclick="forceBackToLibrary(); this.closest('.modal').remove()">Discard</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(confirmModal);
+                return;
+            }
+
+            forceBackToLibrary();
+        }
+
+        function forceBackToLibrary() {
             // If library is empty and we're in temp mode, go to start
             if (videoLibrary.length === 0) {
                 document.getElementById('videoView').classList.remove('active');
@@ -1518,12 +1926,17 @@
                 return;
             }
 
+            tempVideo = null;
             showLibrary();
         }
 
         // ===== EXPORT LIBRARY =====
         function exportLibrary() {
-            const libraryJson = JSON.stringify(videoLibrary);
+            const exportData = {
+                videos: videoLibrary,
+                folders: folders
+            };
+            const libraryJson = JSON.stringify(exportData);
             const exportCode = btoa(libraryJson);
             document.getElementById('exportCodeBox').textContent = exportCode;
             document.getElementById('exportModal').classList.add('active');
