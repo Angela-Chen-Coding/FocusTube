@@ -1497,7 +1497,11 @@
         function showVideoPlayer() {
             // Get video from either temp or library
             const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
-            if (!video) return;
+            if (!video) {
+                showAlert('⚠️ No video to display! Please try again.');
+                console.error('showVideoPlayer: No video found. currentVideoIndex:', currentVideoIndex, 'tempVideo:', tempVideo);
+                return;
+            }
 
             const timestampBtn = document.querySelector('.timestamp-btn');
 
@@ -1894,10 +1898,11 @@
             const videoData = detectVideoPlatform(url);
             if (!videoData) {
                 showAlert('Sorry, we couldn\'t recognize this video URL.');
+                console.error('addNewVideo: detectVideoPlatform returned null for URL:', url);
                 return;
             }
 
-            // Store as temp and ask for name
+            // Store as temp video
             tempVideo = {
                 videoUrl: url,
                 embedUrl: videoData.embedUrl,
@@ -1909,8 +1914,12 @@
                 description: ''
             };
 
+            console.log('addNewVideo: Created tempVideo:', tempVideo);
+
             currentVideoIndex = null;
             closeAddVideoModal();
+
+            console.log('addNewVideo: About to call showVideoPlayer()');
             showVideoPlayer();
         }
 
