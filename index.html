@@ -1508,53 +1508,62 @@
             document.getElementById('libraryView').classList.remove('active');
             document.getElementById('videoView').classList.add('active');
 
-            const timestampBtn = document.querySelector('.timestamp-btn');
-
-            // Clear any existing YouTube player
-            if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
-                try {
-                    youtubePlayer.destroy();
-                } catch (e) {
-                    console.error('Error destroying player:', e);
-                }
-            }
-            youtubePlayer = null;
-
-            if (video.platform === 'YouTube') {
-                const iframe = document.getElementById('videoPlayer');
-
-                // Always set the embedUrl first as fallback
-                iframe.src = video.embedUrl;
-
-                // Then try to attach YouTube IFrame API for timestamps
-                setTimeout(() => {
-                    try {
-                        youtubePlayer = new YT.Player('videoPlayer', {
-                            events: {
-                                'onReady': function(event) {
-                                    timestampBtn.disabled = false;
-                                    timestampBtn.textContent = '⏰ Timestamp';
-                                }
-                            }
-                        });
-                    } catch (e) {
-                        console.error('YouTube Player API error (video still plays):', e);
-                        timestampBtn.disabled = false;
-                        timestampBtn.textContent = '⏰ Timestamp';
-                    }
-                }, 1000);
-            } else {
-                document.getElementById('videoPlayer').src = video.embedUrl;
-                timestampBtn.disabled = true;
-                timestampBtn.textContent = '⏰ Timestamp (YouTube only)';
-            }
-
+            // Update title/URL immediately
             document.getElementById('videoTitle').textContent = video.title || `${video.platform} Video`;
             document.getElementById('videoUrlDisplay').textContent = video.videoUrl;
             document.getElementById('notesArea').value = video.notes || '';
 
-            // Enable clickable timestamps
-            makeTimestampsClickable();
+            // Small delay to let browser render the iframe
+            setTimeout(() => {
+                const timestampBtn = document.querySelector('.timestamp-btn');
+                const iframe = document.getElementById('videoPlayer');
+
+                if (!iframe) {
+                    showAlert('⚠️ Video player not found! Please refresh the page.');
+                    console.error('iframe element not found after view switch');
+                    return;
+                }
+
+                // Clear any existing YouTube player
+                if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
+                    try {
+                        youtubePlayer.destroy();
+                    } catch (e) {
+                        console.error('Error destroying player:', e);
+                    }
+                }
+                youtubePlayer = null;
+
+                if (video.platform === 'YouTube') {
+                    // Always set the embedUrl first as fallback
+                    iframe.src = video.embedUrl;
+
+                    // Then try to attach YouTube IFrame API for timestamps
+                    setTimeout(() => {
+                        try {
+                            youtubePlayer = new YT.Player('videoPlayer', {
+                                events: {
+                                    'onReady': function(event) {
+                                        timestampBtn.disabled = false;
+                                        timestampBtn.textContent = '⏰ Timestamp';
+                                    }
+                                }
+                            });
+                        } catch (e) {
+                            console.error('YouTube Player API error (video still plays):', e);
+                            timestampBtn.disabled = false;
+                            timestampBtn.textContent = '⏰ Timestamp';
+                        }
+                    }, 1000);
+                } else {
+                    iframe.src = video.embedUrl;
+                    timestampBtn.disabled = true;
+                    timestampBtn.textContent = '⏰ Timestamp (YouTube only)';
+                }
+
+                // Enable clickable timestamps
+                makeTimestampsClickable();
+            }, 100);
         }
 
         // ===== LIBRARY RENDERING =====
