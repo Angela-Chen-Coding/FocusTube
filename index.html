@@ -1503,6 +1503,11 @@
                 return;
             }
 
+            // CRITICAL: Switch to video view FIRST so iframe exists in DOM
+            document.getElementById('startScreen').classList.remove('active');
+            document.getElementById('libraryView').classList.remove('active');
+            document.getElementById('videoView').classList.add('active');
+
             const timestampBtn = document.querySelector('.timestamp-btn');
 
             // Clear any existing YouTube player
@@ -1547,10 +1552,6 @@
             document.getElementById('videoTitle').textContent = video.title || `${video.platform} Video`;
             document.getElementById('videoUrlDisplay').textContent = video.videoUrl;
             document.getElementById('notesArea').value = video.notes || '';
-
-            document.getElementById('startScreen').classList.remove('active');
-            document.getElementById('libraryView').classList.remove('active');
-            document.getElementById('videoView').classList.add('active');
 
             // Enable clickable timestamps
             makeTimestampsClickable();
