@@ -1323,6 +1323,7 @@
 
         // ===== VIDEO THUMBNAIL GENERATION =====
         function getVideoThumbnail(video) {
+            if (!video) return '';
             if (video.platform === 'YouTube') {
                 return `https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`;
             } else if (video.platform === 'Vimeo') {
@@ -1641,7 +1642,9 @@
                 </div>
             `;
 
-            html += folder.videoIndices.map(index => {
+            html += folder.videoIndices
+                .filter(index => index >= 0 && index < videoLibrary.length && videoLibrary[index])
+                .map(index => {
                 const video = videoLibrary[index];
                 const preview = video.description || video.notes || 'No description yet...';
                 const thumbnail = getVideoThumbnail(video);
@@ -1675,11 +1678,6 @@
         }
 
         function deleteVideo(index) {
-            if (videoLibrary.length === 1) {
-                showAlert('Cannot delete your last video! Add another one first.');
-                return;
-            }
-
             const confirmModal = document.createElement('div');
             confirmModal.className = 'modal active';
             confirmModal.innerHTML = `
@@ -2022,7 +2020,10 @@
         // ===== SHARE VIDEO =====
         function shareVideo() {
             const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
-            if (!video) return;
+            if (!video) {
+                showAlert('No video to share!');
+                return;
+            }
 
             const baseUrl = window.location.origin + window.location.pathname;
             const params = new URLSearchParams();
@@ -2063,7 +2064,10 @@
         // ===== QR CODE =====
         function showQRCode() {
             const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
-            if (!video) return;
+            if (!video) {
+                showAlert('No video to generate QR code for!');
+                return;
+            }
 
             const baseUrl = window.location.origin + window.location.pathname;
             const params = new URLSearchParams();
@@ -2106,6 +2110,10 @@
 
         // ===== EDIT VIDEO =====
         function showRenameModal(index) {
+            if (index < 0 || index >= videoLibrary.length) {
+                showAlert('Invalid video!');
+                return;
+            }
             renameIndex = index;
             document.getElementById('renameInput').value = videoLibrary[index].title || '';
             document.getElementById('editDescInput').value = videoLibrary[index].description || '';
