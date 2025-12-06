@@ -1323,7 +1323,7 @@
 
         // ===== VIDEO THUMBNAIL GENERATION =====
         function getVideoThumbnail(video) {
-            if (!video) return '';
+            if (!video || !video.platform || !video.videoId) return '';
             if (video.platform === 'YouTube') {
                 return `https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`;
             } else if (video.platform === 'Vimeo') {
@@ -1595,7 +1595,7 @@
             // Render loose videos (not in any folder)
             const looseVideos = videoLibrary
                 .map((video, index) => ({ video, index }))
-                .filter(({ index }) => !videosInFolders.has(index));
+                .filter(({ video, index }) => video && !videosInFolders.has(index));
 
             if (looseVideos.length > 0) {
                 if (folders.length > 0) {
@@ -1673,6 +1673,12 @@
         }
 
         function openVideo(index) {
+            // Validate index before opening
+            if (index < 0 || index >= videoLibrary.length || !videoLibrary[index]) {
+                showAlert('⚠️ This video no longer exists or is invalid!');
+                renderLibrary(); // Refresh to show current state
+                return;
+            }
             currentVideoIndex = index;
             showVideoPlayer();
         }
@@ -1754,11 +1760,15 @@
                 return;
             }
 
-            if (editFolderIndex !== null) {
+            if (editFolderIndex !== null && editFolderIndex >= 0 && editFolderIndex < folders.length && folders[editFolderIndex]) {
                 folders[editFolderIndex].name = newName;
                 renderLibrary();
                 closeEditFolderModal();
                 showAlert('✅ Folder renamed!');
+            } else {
+                showAlert('⚠️ This folder no longer exists!');
+                closeEditFolderModal();
+                renderLibrary();
             }
         }
 
@@ -1817,6 +1827,13 @@
         function moveVideoToFolder(folderIndex) {
             if (moveVideoIndex === null) return;
 
+            if (folderIndex < 0 || folderIndex >= folders.length || !folders[folderIndex]) {
+                showAlert('⚠️ This folder no longer exists!');
+                closeMoveToFolderModal();
+                renderLibrary();
+                return;
+            }
+
             // Remove from all other folders
             folders.forEach(folder => {
                 folder.videoIndices = folder.videoIndices.filter(idx => idx !== moveVideoIndex);
@@ -1846,6 +1863,11 @@
         }
 
         function removeVideoFromFolder(folderIndex, videoIndex) {
+            if (folderIndex < 0 || folderIndex >= folders.length || !folders[folderIndex]) {
+                showAlert('⚠️ Invalid folder!');
+                renderLibrary();
+                return;
+            }
             folders[folderIndex].videoIndices = folders[folderIndex].videoIndices.filter(idx => idx !== videoIndex);
             renderLibrary();
             showAlert('✅ Video removed from folder!');
@@ -2134,12 +2156,16 @@
                 return;
             }
 
-            if (renameIndex !== null) {
+            if (renameIndex !== null && renameIndex >= 0 && renameIndex < videoLibrary.length && videoLibrary[renameIndex]) {
                 videoLibrary[renameIndex].title = newName;
                 videoLibrary[renameIndex].description = newDesc;
                 renderLibrary();
                 closeRenameModal();
                 showAlert('✅ Video updated!');
+            } else {
+                showAlert('⚠️ This video no longer exists!');
+                closeRenameModal();
+                renderLibrary();
             }
         }
 
@@ -2268,7 +2294,7 @@
 
             // Guard: check indices are valid
             if (currentVideoIndex !== null) {
-                if (currentVideoIndex >= 0 && currentVideoIndex < videoLibrary.length) {
+                if (currentVideoIndex >= 0 && currentVideoIndex < videoLibrary.length && videoLibrary[currentVideoIndex]) {
                     videoLibrary[currentVideoIndex].notes = notesArea.value;
                 }
             } else if (tempVideo) {
