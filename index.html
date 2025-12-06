@@ -1516,38 +1516,41 @@
             const timestampBtn = document.querySelector('.timestamp-btn');
             const iframe = document.getElementById('videoPlayer');
 
-            // Set iframe src first
+            // Clear old player properly
+            if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
+                try {
+                    youtubePlayer.destroy();
+                } catch (e) {
+                    console.error('Error destroying old player:', e);
+                }
+            }
+            youtubePlayer = null;
+
+            // Set iframe src
             iframe.src = video.embedUrl;
 
             if (video.platform === 'YouTube') {
-                timestampBtn.disabled = true;
-                timestampBtn.textContent = '⏰ Loading...';
+                timestampBtn.disabled = false;
+                timestampBtn.textContent = '⏰ Timestamp';
 
-                // Wait for iframe to load, THEN attach YouTube API
-                iframe.onload = function() {
-                    setTimeout(() => {
-                        try {
-                            // This will use the EXISTING iframe, not replace it
-                            youtubePlayer = new YT.Player(iframe, {
-                                events: {
-                                    'onReady': function(event) {
-                                        timestampBtn.disabled = false;
-                                        timestampBtn.textContent = '⏰ Timestamp';
-                                        console.log('YouTube API ready!');
-                                    },
-                                    'onError': function(event) {
-                                        timestampBtn.disabled = false;
-                                        timestampBtn.textContent = '⏰ Timestamp';
-                                    }
+                // Try to initialize YouTube Player API after delay
+                setTimeout(() => {
+                    try {
+                        youtubePlayer = new YT.Player('videoPlayer', {
+                            events: {
+                                'onReady': function(event) {
+                                    console.log('YouTube Player API ready!');
+                                },
+                                'onError': function(event) {
+                                    console.error('YouTube Player error:', event);
                                 }
-                            });
-                        } catch (e) {
-                            console.error('YouTube API error:', e);
-                            timestampBtn.disabled = false;
-                            timestampBtn.textContent = '⏰ Timestamp';
-                        }
-                    }, 1000);
-                };
+                            }
+                        });
+                    } catch (e) {
+                        console.error('YouTube API initialization error:', e);
+                        // Still allow manual timestamps
+                    }
+                }, 2000);
             } else {
                 timestampBtn.disabled = true;
                 timestampBtn.textContent = '⏰ Timestamp (YouTube only)';
@@ -2195,28 +2198,45 @@
             const notesArea = document.getElementById('notesArea');
             const video = currentVideoIndex !== null ? videoLibrary[currentVideoIndex] : tempVideo;
 
-            if (video && video.platform === 'YouTube' && youtubePlayer && youtubePlayer.getCurrentTime) {
+            if (!video || video.platform !== 'YouTube') {
+                return;
+            }
+
+            let timeString = "0:00";
+            let autoDetected = false;
+
+            // Try to get current time from YouTube player
+            if (youtubePlayer && typeof youtubePlayer.getCurrentTime === 'function') {
                 try {
                     const currentTime = Math.floor(youtubePlayer.getCurrentTime());
-                    const timeString = formatTime(currentTime);
-
-                    const cursorPos = notesArea.selectionStart;
-                    const textBefore = notesArea.value.substring(0, cursorPos);
-                    const textAfter = notesArea.value.substring(cursorPos);
-
-                    notesArea.value = textBefore + `\n[${timeString}] ` + textAfter;
-                    notesArea.focus();
-                    notesArea.selectionStart = notesArea.selectionEnd = cursorPos + timeString.length + 4;
-
-                    // Auto-save notes
-                    if (currentVideoIndex !== null) {
-                        videoLibrary[currentVideoIndex].notes = notesArea.value;
-                    } else if (tempVideo) {
-                        tempVideo.notes = notesArea.value;
-                    }
+                    timeString = formatTime(currentTime);
+                    autoDetected = true;
                 } catch (e) {
-                    showAlert('Could not get video time. Make sure the video is loaded!');
+                    console.error('Could not get current time:', e);
                 }
+            }
+
+            const cursorPos = notesArea.selectionStart;
+            const textBefore = notesArea.value.substring(0, cursorPos);
+            const textAfter = notesArea.value.substring(cursorPos);
+
+            notesArea.value = textBefore + `\n[${timeString}] ` + textAfter;
+            notesArea.focus();
+
+            if (autoDetected) {
+                // Move cursor after timestamp
+                notesArea.selectionStart = notesArea.selectionEnd = cursorPos + timeString.length + 4;
+            } else {
+                // Select the timestamp so user can edit it
+                notesArea.selectionStart = cursorPos + 2;
+                notesArea.selectionEnd = cursorPos + 2 + timeString.length;
+            }
+
+            // Auto-save notes
+            if (currentVideoIndex !== null) {
+                videoLibrary[currentVideoIndex].notes = notesArea.value;
+            } else if (tempVideo) {
+                tempVideo.notes = notesArea.value;
             }
         }
 
