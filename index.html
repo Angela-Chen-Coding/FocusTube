@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FocusTube - Your Video Library</title>
-    <link rel="icon" type="image/png" href="FocusTube.png">
+    <link rel="icon" type="image/png" href="FocusTube.png"
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Literata:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -1505,11 +1505,26 @@
 
             if (video.platform === 'YouTube') {
                 const iframe = document.getElementById('videoPlayer');
-                iframe.src = video.embedUrl;
+
+                // Reset iframe completely for YouTube
+                const container = iframe.parentNode;
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'videoPlayer';
+                newIframe.allowFullscreen = true;
+                newIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                container.replaceChild(newIframe, iframe);
 
                 setTimeout(() => {
                     try {
                         youtubePlayer = new YT.Player('videoPlayer', {
+                            videoId: video.videoId,
+                            playerVars: {
+                                'enablejsapi': 1,
+                                'modestbranding': 1,
+                                'rel': 0,
+                                'fs': 1,
+                                'controls': 1
+                            },
                             events: {
                                 'onReady': function() {
                                     timestampBtn.disabled = false;
@@ -1521,7 +1536,7 @@
                         timestampBtn.disabled = false;
                         timestampBtn.textContent = '⏰ Timestamp';
                     }
-                }, 1000);
+                }, 500);
             } else {
                 document.getElementById('videoPlayer').src = video.embedUrl;
                 timestampBtn.disabled = true;
