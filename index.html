@@ -1505,14 +1505,7 @@
 
             if (video.platform === 'YouTube') {
                 const iframe = document.getElementById('videoPlayer');
-
-                // Reset iframe completely for YouTube
-                const container = iframe.parentNode;
-                const newIframe = document.createElement('iframe');
-                newIframe.id = 'videoPlayer';
-                newIframe.allowFullscreen = true;
-                newIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-                container.replaceChild(newIframe, iframe);
+                iframe.src = '';  // Clear the iframe
 
                 setTimeout(() => {
                     try {
@@ -1526,17 +1519,18 @@
                                 'controls': 1
                             },
                             events: {
-                                'onReady': function() {
+                                'onReady': function(event) {
                                     timestampBtn.disabled = false;
                                     timestampBtn.textContent = '⏰ Timestamp';
                                 }
                             }
                         });
                     } catch (e) {
+                        console.error('YouTube Player error:', e);
                         timestampBtn.disabled = false;
                         timestampBtn.textContent = '⏰ Timestamp';
                     }
-                }, 500);
+                }, 300);
             } else {
                 document.getElementById('videoPlayer').src = video.embedUrl;
                 timestampBtn.disabled = true;
