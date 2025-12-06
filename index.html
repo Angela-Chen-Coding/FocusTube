@@ -1514,9 +1514,9 @@
             document.getElementById('notesArea').value = video.notes || '';
 
             const timestampBtn = document.querySelector('.timestamp-btn');
-            const iframe = document.getElementById('videoPlayer');
+            const videoContainer = document.querySelector('.video-container');
 
-            // Clear old player properly
+            // Destroy old YouTube player completely
             if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
                 try {
                     youtubePlayer.destroy();
@@ -1526,20 +1526,27 @@
             }
             youtubePlayer = null;
 
-            // Set iframe src
-            iframe.src = video.embedUrl;
+            // Create fresh iframe every time to avoid state issues
+            videoContainer.innerHTML = `
+                <iframe
+                    id="videoPlayer"
+                    allowfullscreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    src="${video.embedUrl}"
+                ></iframe>
+            `;
 
             if (video.platform === 'YouTube') {
                 timestampBtn.disabled = false;
                 timestampBtn.textContent = '⏰ Timestamp';
 
-                // Try to initialize YouTube Player API after delay
+                // Initialize YouTube Player API after iframe loads
                 setTimeout(() => {
                     try {
                         youtubePlayer = new YT.Player('videoPlayer', {
                             events: {
                                 'onReady': function(event) {
-                                    console.log('YouTube Player API ready!');
+                                    console.log('YouTube Player API ready for library video!');
                                 },
                                 'onError': function(event) {
                                     console.error('YouTube Player error:', event);
@@ -1548,7 +1555,6 @@
                         });
                     } catch (e) {
                         console.error('YouTube API initialization error:', e);
-                        // Still allow manual timestamps
                     }
                 }, 2000);
             } else {
